@@ -6,6 +6,19 @@ from transformers import VisionEncoderDecoderModel, ViTImageProcessor, AutoToken
 import torch
 from PIL import Image
 import os
+import logging
+from pathlib import Path
+
+log_file = f"{Path(__file__).stem}.log"
+logging.basicConfig(
+    level=logging.INFO,  # Set log level
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(log_file),  # Log to file
+        logging.StreamHandler()         # Log to console
+    ]
+)
+logger = logging.getLogger(__name__)
 
 # Load image captioning model
 model = VisionEncoderDecoderModel.from_pretrained("nlpconnect/vit-gpt2-image-captioning")
