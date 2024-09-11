@@ -15,10 +15,6 @@ tokenizer = AutoTokenizer.from_pretrained("nlpconnect/vit-gpt2-image-captioning"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model.to(device)
 
-# Load math to LaTeX conversion dictionary
-with open("math_to_latex.json", "r") as f:
-    math_to_latex = json.load(f)
-
 # Define bullet point symbols
 BULLET_POINTS = '•◦▪▫●○'
 
@@ -48,10 +44,6 @@ def caption_image(image):
     generated_caption = generated_caption.strip()
     return generated_caption
 
-def convert_math_to_latex(text):
-    for symbol, latex in math_to_latex.items():
-        text = text.replace(symbol, f"${latex}$")
-    return text
 
 def clean_text(text):
     # Remove leading/trailing whitespaces
@@ -70,11 +62,14 @@ def apply_formatting(text, flags):
     is_italic = flags & 2**1
     is_monospace = flags & 2**3
     is_superscript = flags & 2**0
+    is_subscript = flags & 2**5 
 
     if is_monospace:
         text = f"`{text}`"
     if is_superscript:
         text = f"^{text}^"
+    if is_subscript:
+        text = f"~{text}~"
 
     if is_bold and is_italic:
         text = f"***{text}***"
@@ -156,9 +151,6 @@ def extract_markdown(pdf_path):
                             else:
                                 # If not a list item, apply formatting to entire text
                                 text = apply_formatting(text, flags)
-
-                        # Convert mathematical symbols to LaTeX
-                        text = convert_math_to_latex(text)
 
                         line_text += text
 
