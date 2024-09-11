@@ -45,6 +45,7 @@ def caption_image(image):
 
     generated_ids = model.generate(pixel_values, max_length=50)
     generated_caption = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
+    generated_caption = generated_caption.strip()
     return generated_caption
 
 def convert_math_to_latex(text):
@@ -167,7 +168,7 @@ def extract_markdown(pdf_path):
                         list_counter = 0  # Reset numbered list counter
                     elif is_numbered_list_item(clean_line):
                         list_counter += 1
-                        markdown_content += "\n" + convert_numbered_list_to_markdown(clean_line, list_counter)
+                        markdown_content += "\n" + convert_numbered_list_to_markdown(clean_line, list_counter)   
                     else:
                         markdown_content += f"{clean_line}\n"
                         list_counter = 0  # Reset numbered list counter
