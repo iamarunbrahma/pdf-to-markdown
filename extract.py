@@ -101,6 +101,10 @@ def convert_numbered_list_to_markdown(text, list_counter):
     text = re.sub(r'^\s*', '', text)
     return re.sub(r'^\d+\s{0,3}[.)]', f"{list_counter}. ", text)
 
+def is_horizontal_line(text):
+    # Check if the text consists only of underscores or dashes
+    return bool(re.match(r'^[_-]+$', text.strip()))
+
 def extract_markdown(pdf_path):
     doc = fitz.open(pdf_path)
     markdown_content = ""
@@ -126,6 +130,11 @@ def extract_markdown(pdf_path):
                         text = span["text"]
                         font_size = span["size"]
                         flags = span["flags"]
+
+                        # Check for horizontal line
+                        if is_horizontal_line(text):
+                            line_text += "\n---\n"  # Add horizontal line in Markdown
+                            continue
 
                         # Determine header level based on font size
                         header_level = 1 if font_size > 24 else 2 if font_size > 20 else 3 if font_size > 18 else 4 if font_size > 16 else 5 if font_size > 14 else 6 if font_size > 12 else 0
@@ -196,10 +205,10 @@ def extract_markdown(pdf_path):
             table_index += 1
 
     # Post-processing
-    markdown_content = re.sub(r'\*\s*\*', '', markdown_content)  # Remove empty bold/italic
     markdown_content = re.sub(r'\n{3,}', '\n\n', markdown_content)  # Remove excessive newlines
     markdown_content = re.sub(r'(\d+)\s*\n', '', markdown_content)  # Remove page numbers
     markdown_content = re.sub(r' +', ' ', markdown_content)  # Remove multiple spaces
+    markdown_content = re.sub(r'\s*(---\n)+', '\n\n---\n', markdown_content)  # Remove duplicate horizontal lines
 
     return markdown_content
 
