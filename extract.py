@@ -71,17 +71,19 @@ def apply_formatting(text, flags):
     is_monospace = flags & 2**3
     is_superscript = flags & 2**0
 
-    if is_bold and is_italic:
-        text = f" ***{text}*** "
-    elif is_bold:
-        text = f" **{text}** "
-    elif is_italic:
-        text = f" *{text}* "
-    
     if is_monospace:
-        text = f" `{text}` "
+        text = f"`{text}`"
     if is_superscript:
-        text = f" <sup>{text}</sup> "
+        text = f"^{text}^"
+
+    if is_bold and is_italic:
+        text = f"***{text}***"
+    elif is_bold:
+        text = f"**{text}**"
+    elif is_italic:
+        text = f"*{text}*"
+
+    text = f" {text} "
     
     return text
 
@@ -224,5 +226,5 @@ def main(pdf_path):
     print(f"Markdown content has been saved to outputs/output.md")
 
 if __name__ == "__main__":
-    pdf_path = "inputs/meta.pdf"
+    pdf_path = "inputs/attention.pdf"
     main(pdf_path)
