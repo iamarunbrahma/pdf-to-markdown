@@ -39,7 +39,7 @@ def caption_image(image):
     inputs = feature_extractor(images=image, return_tensors="pt").to(device)
     pixel_values = inputs.pixel_values
 
-    generated_ids = model.generate(pixel_values, max_length=50)
+    generated_ids = model.generate(pixel_values, max_length=30)
     generated_caption = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
     generated_caption = generated_caption.strip()
     return generated_caption
@@ -66,9 +66,9 @@ def apply_formatting(text, flags):
 
     if is_monospace:
         text = f"`{text}`"
-    if is_superscript:
+    if is_superscript and not bool(re.search(r'\s+', text)):
         text = f"^{text}^"
-    if is_subscript:
+    if is_subscript and not bool(re.search(r'\s+', text)):
         text = f"~{text}~"
 
     if is_bold and is_italic:
@@ -102,6 +102,16 @@ def is_horizontal_line(text):
     # Check if the text consists only of underscores or dashes
     return bool(re.match(r'^[_-]+$', text.strip()))
 
+def extract_links(page):
+    links = []
+    for link in page.get_links():
+        if link["kind"] == 2:  # URI link
+            links.append({
+                "rect": link["from"],
+                "uri": link["uri"]
+            })
+    return links
+
 def extract_markdown(pdf_path):
     doc = fitz.open(pdf_path)
     markdown_content = ""
@@ -112,6 +122,8 @@ def extract_markdown(pdf_path):
     for page in doc:
         blocks = page.get_text("dict")["blocks"]
         page_height = page.rect.height
+        links = extract_links(page)
+
         for block in blocks:
             if block["type"] == 0:  # Text
                 # Skip headers and footers
@@ -127,6 +139,7 @@ def extract_markdown(pdf_path):
                         text = span["text"]
                         font_size = span["size"]
                         flags = span["flags"]
+                        span_rect = span["bbox"]
 
                         # Check for horizontal line
                         if is_horizontal_line(text):
@@ -151,6 +164,12 @@ def extract_markdown(pdf_path):
                             else:
                                 # If not a list item, apply formatting to entire text
                                 text = apply_formatting(text, flags)
+                        
+                        # Check if the span intersects with any link
+                        for link in links:
+                            if fitz.Rect(span_rect).intersects(link["rect"]):
+                                text = f"[{text.strip()}]({link['uri']})"
+                                break
 
                         line_text += text
 
