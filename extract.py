@@ -20,7 +20,7 @@ with open("math_to_latex.json", "r") as f:
     math_to_latex = json.load(f)
 
 # Define bullet point symbols
-BULLET_POINTS = ['•', '◦', '▪', '▫', '●', '○']
+BULLET_POINTS = '•◦▪▫●○'
 
 def extract_tables(pdf_path):
     tables = []
@@ -45,7 +45,6 @@ def caption_image(image):
 
     generated_ids = model.generate(pixel_values, max_length=50)
     generated_caption = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
-    generated_caption = generated_caption.strip()
     return generated_caption
 
 def convert_math_to_latex(text):
@@ -53,26 +52,73 @@ def convert_math_to_latex(text):
         text = text.replace(symbol, f"${latex}$")
     return text
 
+def clean_text(text):
+    # Remove leading/trailing whitespaces
+    text = text.strip()
+    # Remove multiple spaces
+    text = re.sub(r'\s+', ' ', text)
+    return text
+
+def apply_formatting(text, flags):
+    # Apply formatting without leading/trailing spaces
+    text = text.strip()
+    if not text:
+        return text
+    
+    is_bold = flags & 2**4
+    is_italic = flags & 2**1
+    is_monospace = flags & 2**3
+    is_superscript = flags & 2**0
+
+    if is_bold and is_italic:
+        text = f" ***{text}*** "
+    elif is_bold:
+        text = f" **{text}** "
+    elif is_italic:
+        text = f" *{text}* "
+    
+    if is_monospace:
+        text = f" `{text}` "
+    if is_superscript:
+        text = f" <sup>{text}</sup> "
+    
+    return text
+
 def is_bullet_point(text):
-    return any(text.strip().startswith(bullet) for bullet in BULLET_POINTS)
+    return text.strip().startswith(tuple(BULLET_POINTS))
+
+def convert_bullet_to_markdown(text):
+    # Remove any leading newlines and spaces, then add the markdown bullet
+    text = re.sub(r'^\s*', '', text)
+    return re.sub(f'^[{re.escape(BULLET_POINTS)}]\s*', '- ', text)
+
+def is_numbered_list_item(text):
+    # Check if the text starts with a number followed by a dot or parenthesis
+    return bool(re.match(r'^\d+\s{0,3}[.)]', text.strip()))
+
+def convert_numbered_list_to_markdown(text, list_counter):
+    text = re.sub(r'^\s*', '', text)
+    return re.sub(r'^\d+\s{0,3}[.)]', f"{list_counter}. ", text)
 
 def extract_markdown(pdf_path):
     doc = fitz.open(pdf_path)
     markdown_content = ""
     tables = extract_tables(pdf_path)
     table_index = 0
-    current_list_item = ""
-    in_list = False
+    list_counter = 0  # Counter for numbered lists
 
     for page in doc:
         blocks = page.get_text("dict")["blocks"]
+        page_height = page.rect.height
         for block in blocks:
             if block["type"] == 0:  # Text
+                # Skip headers and footers
                 block_rect = block["bbox"]
-                page_height = page.rect.height
                 if block_rect[1] < 50 or block_rect[3] > page_height - 50:
                     continue
 
+                block_text = ""
+                last_y1 = None
                 for line in block["lines"]:
                     line_text = ""
                     for span in line["spans"]:
@@ -80,53 +126,51 @@ def extract_markdown(pdf_path):
                         font_size = span["size"]
                         flags = span["flags"]
 
-                        # # Skip headers and footers
-                        # if font_size < 8 or font_size > 20:
-                        #     continue
-
                         # Determine header level based on font size
-                        if 16 < font_size <= 20:
-                            text = f"## {text}\n\n"
-                        elif 14 < font_size <= 16:
-                            text = f"### {text}\n\n"
-                        elif 12 < font_size <= 14:
-                            text = f"#### {text}\n\n"
+                        header_level = 1 if font_size > 24 else 2 if font_size > 20 else 3 if font_size > 18 else 4 if font_size > 16 else 5 if font_size > 14 else 6 if font_size > 12 else 0
+
+                        if header_level > 0:
+                            text = f"\n{'#' * header_level} {clean_text(text)}\n\n"
                         else:
                             # Apply formatting
-                            if flags & 2**0:  # Superscript
-                                text = f"<sup>{text}</sup>"
-                            if flags & 2**1:  # Italic
-                                text = f"*{text}*"
-                            if flags & 2**3:  # Monospace
-                                text = f"`{text}`"
-                            if flags & 2**4:  # Bold
-                                text = f"**{text}**"
+                            is_list_item = is_bullet_point(text) or is_numbered_list_item(text)
+
+                            if is_list_item:
+                                # If it's a list item, split the marker and content
+                                marker, content = re.split(r'(?<=^[•◦▪▫●○\d.)])\s*', text, 1)
+                                # Apply formatting only to content
+                                formatted_content = apply_formatting(content, flags)
+                                text = f"{marker} {formatted_content}"
+                            else:
+                                # If not a list item, apply formatting to entire text
+                                text = apply_formatting(text, flags)
 
                         # Convert mathematical symbols to LaTeX
                         text = convert_math_to_latex(text)
 
-                        # Check for bullet points or numbered lists
-                        if is_bullet_point(text) or re.match(r'^\d+\.', text.strip()):
-                            if current_list_item:
-                                markdown_content += current_list_item + "\n"
-                            current_list_item = text.strip() + " "
-                            in_list = True
-                        elif in_list:
-                            current_list_item += text + " "
-                        else:
-                            line_text += text + " "
+                        line_text += text
 
-                    if not in_list:
-                        markdown_content += line_text.strip() + "\n"
-                    elif not is_bullet_point(line_text) and not re.match(r'^\d+\.', line_text.strip()):
-                        markdown_content += current_list_item + "\n"
-                        current_list_item = ""
-                        in_list = False
+                    # Check if this is a new line or continuation of the previous line
+                    if last_y1 is not None and abs(line["bbox"][1] - last_y1) > 2:  # Adjust the threshold as needed
+                        block_text += "\n"
+                    
+                    block_text += clean_text(line_text) + " "
+                    last_y1 = line["bbox"][3]  # Bottom y-coordinate of the current line
 
-                if current_list_item:
-                    markdown_content += current_list_item + "\n"
-                    current_list_item = ""
-                    in_list = False
+                # Process block text for bullet points and numbered lists
+                lines = block_text.split('\n')
+                for i, line in enumerate(lines):
+                    clean_line = clean_text(line)
+
+                    if is_bullet_point(clean_line):
+                        markdown_content += "\n" + convert_bullet_to_markdown(clean_line)
+                        list_counter = 0  # Reset numbered list counter
+                    elif is_numbered_list_item(clean_line):
+                        list_counter += 1
+                        markdown_content += "\n" + convert_numbered_list_to_markdown(clean_line, list_counter)
+                    else:
+                        markdown_content += f"{clean_line}\n"
+                        list_counter = 0  # Reset numbered list counter
 
                 markdown_content += "\n"
 
@@ -136,7 +180,7 @@ def extract_markdown(pdf_path):
                 image = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
                 
                 # Save image
-                image_filename = f"outputs/image_{page.number}_{block['number']}.png"
+                image_filename = f"outputs/image_{int(page.number)+1}_{block['number']}.png"
                 image.save(image_filename)
 
                 # Caption image
@@ -154,14 +198,20 @@ def extract_markdown(pdf_path):
     markdown_content = re.sub(r'\*\s*\*', '', markdown_content)  # Remove empty bold/italic
     markdown_content = re.sub(r'\n{3,}', '\n\n', markdown_content)  # Remove excessive newlines
     markdown_content = re.sub(r'(\d+)\s*\n', '', markdown_content)  # Remove page numbers
+    markdown_content = re.sub(r' +', ' ', markdown_content)  # Remove multiple spaces
 
     return markdown_content
 
 def main(pdf_path):
+    # Ensure output directory exists
+    os.makedirs("outputs", exist_ok=True)
+
     markdown_content = extract_markdown(pdf_path)
     
     with open("outputs/output.md", "w", encoding="utf-8") as f:
         f.write(markdown_content)
+
+    print(f"Markdown content has been saved to outputs/output.md")
 
 if __name__ == "__main__":
     pdf_path = "inputs/meta.pdf"
