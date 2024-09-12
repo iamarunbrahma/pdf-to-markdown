@@ -79,9 +79,9 @@ def apply_formatting(text, flags):
 
     if is_monospace:
         text = f"`{text}`"
-    if is_superscript and not bool(re.search(r'\s+', text)):
+    elif is_superscript and not bool(re.search(r'\s+', text)):
         text = f"^{text}^"
-    if is_subscript and not bool(re.search(r'\s+', text)):
+    elif is_subscript and not bool(re.search(r'\s+', text)):
         text = f"~{text}~"
 
     if is_bold and is_italic:
