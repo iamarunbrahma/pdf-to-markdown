@@ -1,13 +1,22 @@
 import fitz  # PyMuPDF
 import pdfplumber
 import re
-import json
+import pytesseract
+import cv2
+import numpy as np
+import transformers
 from transformers import VisionEncoderDecoderModel, ViTImageProcessor, AutoTokenizer
 import torch
 from PIL import Image
 import os
 import logging
+import traceback
+import warnings
 from pathlib import Path
+
+warnings.filterwarnings("ignore")
+
+transformers.logging.set_verbosity(transformers.logging.ERROR)
 
 log_file = f"{Path(__file__).stem}.log"
 logging.basicConfig(
@@ -37,18 +46,51 @@ def extract_tables(pdf_path):
         for page_number, page in enumerate(pdf.pages):
             page_tables = page.extract_tables()
             for table in page_tables:
-                tables.append({"page": page_number, "content": table})
+                tables.append({"page": page_number, "content": table})              
     return tables
 
 def table_to_markdown(table):
+    if not table:
+        return ""
+
+    # Remove any None values and replace with empty strings
+    table = [['' if cell is None else str(cell).strip() for cell in row] for row in table]
+
+    # Determine the maximum width of each column
+    col_widths = [max(len(cell) for cell in col) for col in zip(*table)]
+
     markdown = ""
     for i, row in enumerate(table):
-        markdown += "| " + " | ".join(cell if cell else "" for cell in row) + " |\n"
+        # Left-align text in each cell and pad to match column width
+        formatted_row = [cell.ljust(col_widths[j]) for j, cell in enumerate(row)]
+        markdown += "| " + " | ".join(formatted_row) + " |\n"
+
+        # Add the header separator after the first row
         if i == 0:
-            markdown += "|" + "|".join(["---"] * len(row)) + "|\n"
+            markdown += "|" + "|".join(["-" * (width + 2) for width in col_widths]) + "|\n"
+
     return markdown
 
+def perform_ocr(image):
+    # Convert PIL Image to OpenCV format
+    opencv_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+    ocr_result = pytesseract.image_to_data(opencv_image, output_type=pytesseract.Output.DICT)
+    
+    result = ""
+    for word in ocr_result['text']:
+        if word.strip() != "":
+            result += word + " "
+
+        if len(result) > 30:
+            break
+    
+    return result.strip()
+
 def caption_image(image):
+    ocr_text = perform_ocr(image)
+    if ocr_text:
+        return ocr_text
+    
     inputs = feature_extractor(images=image, return_tensors="pt").to(device)
     pixel_values = inputs.pixel_values
 
@@ -311,7 +353,7 @@ def extract_markdown(pdf_path):
 
         # Insert tables at their approximate positions
         while table_index < len(tables) and tables[table_index]["page"] == page.number:
-            markdown_content += table_to_markdown(tables[table_index]["content"]) + "\n\n"
+            markdown_content += "\n\n" + table_to_markdown(tables[table_index]["content"]) + "\n\n"
             table_index += 1
 
     # Post-processing
@@ -324,14 +366,19 @@ def extract_markdown(pdf_path):
 
 def main(pdf_path):
     # Ensure output directory exists
-    os.makedirs("outputs", exist_ok=True)
+    try:
+        os.makedirs("outputs", exist_ok=True)
 
-    markdown_content = extract_markdown(pdf_path)
+        markdown_content = extract_markdown(pdf_path)
+        
+        with open("outputs/output.md", "w", encoding="utf-8") as f:
+            f.write(markdown_content)
+
+        print(f"Markdown content has been saved to outputs/output.md")
     
-    with open("outputs/output.md", "w", encoding="utf-8") as f:
-        f.write(markdown_content)
-
-    print(f"Markdown content has been saved to outputs/output.md")
+    except Exception as e:
+        logger.error(f"Error processing PDF: {e}")
+        logger.exception(traceback.format_exc())
 
 if __name__ == "__main__":
     pdf_path = "inputs/attention.pdf"
