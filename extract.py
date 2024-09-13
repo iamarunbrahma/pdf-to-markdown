@@ -335,20 +335,23 @@ class MarkdownPDFExtractor(PDFExtractor):
                     if self.is_horizontal_line(text):
                         line_text += "\n---\n"
                         continue
+                    
+                    text = self.clean_text(text)
 
-                    header_level = self.get_header_level(font_size)
+                    if text.strip():
+                        header_level = self.get_header_level(font_size)                   
+                        if header_level > 0:
+                            text = f"\n{'#' * header_level} {text}\n\n"
 
-                    if header_level > 0:
-                        text = f"\n{'#' * header_level} {self.clean_text(text)}\n\n"
-                    else:
-                        is_list_item = self.is_bullet_point(text) or self.is_numbered_list_item(text)
-
-                        if is_list_item:
-                            marker, content = re.split(r'(?<=^[•◦▪▫●○\d.)])\s*', text, 1)
-                            formatted_content = self.apply_formatting(content, flags)
-                            text = f"{marker} {formatted_content}"
                         else:
-                            text = self.apply_formatting(text, flags)
+                            is_list_item = self.is_bullet_point(text) or self.is_numbered_list_item(text)
+
+                            if is_list_item:
+                                marker, content = re.split(r'(?<=^[•◦▪▫●○\d.)])\s*', text, 1)
+                                formatted_content = self.apply_formatting(content, flags)
+                                text = f"{marker} {formatted_content}"
+                            else:
+                                text = self.apply_formatting(text, flags)
                     
                     for link in links:
                         if fitz.Rect(span_rect).intersects(link["rect"]):
