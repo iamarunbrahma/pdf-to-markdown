@@ -163,8 +163,12 @@ def extract_markdown(pdf_path):
 
                 block_text = ""
                 last_y1 = None
+                last_font_size = None
+
                 for line in block["lines"]:
                     line_text = ""
+                    curr_font_size = [span["size"] for span in line["spans"]]
+
                     for span in line["spans"]:
                         text = span["text"]
                         font_size = span["size"]
@@ -204,10 +208,16 @@ def extract_markdown(pdf_path):
                         line_text += text
 
                     # Check if this is a new line or continuation of the previous line
-                    if last_y1 is not None and abs(line["bbox"][1] - last_y1) > 2:  # Adjust the threshold as needed
-                        block_text += "\n"
+                    if last_y1 is not None:
+                        avg_last_font_size = sum(last_font_size) / len(last_font_size) if last_font_size else 0
+                        avg_current_font_size = sum(curr_font_size) / len(curr_font_size)
+                        font_size_changed = abs(avg_current_font_size - avg_last_font_size) > 1
+
+                        if abs(line["bbox"][3] - last_y1) > 2 or font_size_changed:
+                            block_text += "\n"
                     
                     block_text += clean_text(line_text) + " "
+                    last_font_size = curr_font_size
                     last_y1 = line["bbox"][3]  # Bottom y-coordinate of the current line
 
                 # Process block text for bullet points and numbered lists
