@@ -454,6 +454,13 @@ class MarkdownPDFExtractor(PDFExtractor):
             markdown_content = re.sub(r'(\d+)\s*\n', '', markdown_content)  # Remove page numbers
             markdown_content = re.sub(r' +', ' ', markdown_content)  # Remove multiple spaces
             markdown_content = re.sub(r'\s*(---\n)+', '\n\n---\n', markdown_content)  # Remove duplicate horizontal lines
+
+            def remove_middle_headers(match):
+                line = match.group(0)
+                # Keep the initial header and remove all subsequent '#' characters
+                return re.sub(r'(^#{1,6}\s).*?(?=\n)', lambda m: m.group(1) + re.sub(r'#', '', m.group(0)[len(m.group(1)):]), line)
+            
+            markdown_content = re.sub(r'^#{1,6}\s.*\n', remove_middle_headers, markdown_content, flags=re.MULTILINE) # Remove headers in the middle of lines         
             return markdown_content
         except Exception as e:
             self.logger.error(f"Error post-processing markdown: {e}")
