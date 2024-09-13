@@ -125,18 +125,55 @@ def extract_links(page):
             })
     return links
 
-def detect_code_block(text):
+def detect_code_block(prev_line, current_line):
     patterns = {
-        'python': r'(?s)^(?:(?:from|import|def|class|if|for|while|try|except|with)\s|\s{4})',
-        'javascript': r'(?s)^(?:function|const|let|var|if|for|while|try|catch|class)\s',
-        'html': r'(?s)^<(!DOCTYPE|html|head|body|div|p|a|script|style)',
-        'shell': r'(?s)^(?:\$|\#)\s',
-        'bash': r'(?s)^(?:#!/bin/bash|alias|export|source|echo|read|if|for|while|case|function)',
+        'python': [
+            (r'^(?:from|import)\s+\w+', r'^(?:from|import|def|class|if|for|while|try|except|with)\s'),
+            (r'^(?:def|class)\s+\w+', r'^\s{4}'),
+            (r'^\s{4}', r'^\s{4,}')
+        ],
+        'javascript': [
+            (r'^(?:function|const|let|var)\s+\w+', r'^(?:function|const|let|var|if|for|while|try|catch|class)\s'),
+            (r'^(?:if|for|while)\s*\(', r'^\s{2,}'),
+            (r'^\s{2,}', r'^\s{2,}')
+        ],
+        'html': [
+            (r'^<(!DOCTYPE|html|head|body|div|p|a|script|style)', r'^<(!DOCTYPE|html|head|body|div|p|a|script|style)'),
+            (r'^<\w+.*>$', r'^\s{2,}<'),
+            (r'^\s{2,}<', r'^\s{2,}<')
+        ],
+        'shell': [
+            (r'^(?:\$|\#)\s', r'^(?:\$|\#)\s'),
+            (r'^[a-z_]+\s*=', r'^[a-z_]+\s*=')
+        ],
+        'bash': [
+            (r'^(?:#!/bin/bash|alias|export|source)\s', r'^(?:#!/bin/bash|alias|export|source|echo|read|if|for|while|case|function)\s'),
+            (r'^(?:if|for|while|case|function)\s', r'^\s{2,}'),
+            (r'^\s{2,}', r'^\s{2,}')
+        ],
+        'cpp': [
+            (r'^#include\s*<', r'^(?:#include|using|namespace|class|struct|enum|template|typedef)\s'),
+            (r'^(?:class|struct|enum)\s+\w+', r'^\s{2,}'),
+            (r'^\s{2,}', r'^\s{2,}')
+        ],
+        'java': [
+            (r'^(?:import|package)\s+\w+', r'^(?:import|package|public|private|protected|class|interface|enum)\s'),
+            (r'^(?:public|private|protected)\s+class\s+\w+', r'^\s{4,}'),
+            (r'^\s{4,}', r'^\s{4,}')
+        ],
+        'json': [
+            (r'^\s*{', r'^\s*["{[]'),
+            (r'^\s*"', r'^\s*["}],?$'),
+            (r'^\s*\[', r'^\s*[}\]],?$')
+        ]
     }
     
-    for lang, pattern in patterns.items():
-        if re.match(pattern, text, re.MULTILINE):
-            return lang
+    for lang, pattern_pairs in patterns.items():
+        for prev_pattern, curr_pattern in pattern_pairs:
+            if (re.match(prev_pattern, prev_line.strip()) and 
+                re.match(curr_pattern, current_line.strip())):
+                return lang
+            
     return None
 
 def extract_markdown(pdf_path):
@@ -148,6 +185,7 @@ def extract_markdown(pdf_path):
     in_code_block = False
     code_block_content = ""
     code_block_lang = None
+    prev_line = ""
 
     for page in doc:
         blocks = page.get_text("dict")["blocks"]
@@ -226,31 +264,33 @@ def extract_markdown(pdf_path):
                     clean_line = clean_text(line)
 
                     if not in_code_block:
-                        code_lang = detect_code_block(clean_line)
+                        code_lang = detect_code_block(prev_line, clean_line)
                         if code_lang:
                             in_code_block = True
                             code_block_lang = code_lang
-                            code_block_content = clean_line + "\n"
+                            code_block_content = prev_line + "\n" + clean_line + "\n"
+                            prev_line = clean_line
                             continue
 
                     if in_code_block:
                         code_block_content += clean_line + "\n"
-                        if i == len(lines) - 1 or detect_code_block(lines[i+1]) != code_block_lang:
+                        if i == len(lines) - 1 or detect_code_block(clean_line, lines[i+1]) != code_block_lang:
                             markdown_content += f"```{code_block_lang}\n{code_block_content}```\n\n"
                             in_code_block = False
                             code_block_content = ""
                             code_block_lang = None
-
                     else:
                         if is_bullet_point(clean_line):
                             markdown_content += "\n" + convert_bullet_to_markdown(clean_line)
-                            list_counter = 0  # Reset numbered list counter
+                            list_counter = 0
                         elif is_numbered_list_item(clean_line):
                             list_counter += 1
                             markdown_content += "\n" + convert_numbered_list_to_markdown(clean_line, list_counter)   
                         else:
                             markdown_content += f"{clean_line}\n"
-                            list_counter = 0  # Reset numbered list counter
+                            list_counter = 0
+
+                    prev_line = clean_line
 
                 markdown_content += "\n"
 
