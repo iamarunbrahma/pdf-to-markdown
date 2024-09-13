@@ -125,12 +125,29 @@ def extract_links(page):
             })
     return links
 
+def detect_code_block(text):
+    patterns = {
+        'python': r'(?s)^(?:(?:from|import|def|class|if|for|while|try|except|with)\s|\s{4})',
+        'javascript': r'(?s)^(?:function|const|let|var|if|for|while|try|catch|class)\s',
+        'html': r'(?s)^<(!DOCTYPE|html|head|body|div|p|a|script|style)',
+        'shell': r'(?s)^(?:\$|\#)\s',
+        'bash': r'(?s)^(?:#!/bin/bash|alias|export|source|echo|read|if|for|while|case|function)',
+    }
+    
+    for lang, pattern in patterns.items():
+        if re.match(pattern, text, re.MULTILINE):
+            return lang
+    return None
+
 def extract_markdown(pdf_path):
     doc = fitz.open(pdf_path)
     markdown_content = ""
     tables = extract_tables(pdf_path)
     table_index = 0
     list_counter = 0  # Counter for numbered lists
+    in_code_block = False
+    code_block_content = ""
+    code_block_lang = None
 
     for page in doc:
         blocks = page.get_text("dict")["blocks"]
@@ -198,15 +215,32 @@ def extract_markdown(pdf_path):
                 for i, line in enumerate(lines):
                     clean_line = clean_text(line)
 
-                    if is_bullet_point(clean_line):
-                        markdown_content += "\n" + convert_bullet_to_markdown(clean_line)
-                        list_counter = 0  # Reset numbered list counter
-                    elif is_numbered_list_item(clean_line):
-                        list_counter += 1
-                        markdown_content += "\n" + convert_numbered_list_to_markdown(clean_line, list_counter)   
+                    if not in_code_block:
+                        code_lang = detect_code_block(clean_line)
+                        if code_lang:
+                            in_code_block = True
+                            code_block_lang = code_lang
+                            code_block_content = clean_line + "\n"
+                            continue
+
+                    if in_code_block:
+                        code_block_content += clean_line + "\n"
+                        if i == len(lines) - 1 or detect_code_block(lines[i+1]) != code_block_lang:
+                            markdown_content += f"```{code_block_lang}\n{code_block_content}```\n\n"
+                            in_code_block = False
+                            code_block_content = ""
+                            code_block_lang = None
+
                     else:
-                        markdown_content += f"{clean_line}\n"
-                        list_counter = 0  # Reset numbered list counter
+                        if is_bullet_point(clean_line):
+                            markdown_content += "\n" + convert_bullet_to_markdown(clean_line)
+                            list_counter = 0  # Reset numbered list counter
+                        elif is_numbered_list_item(clean_line):
+                            list_counter += 1
+                            markdown_content += "\n" + convert_numbered_list_to_markdown(clean_line, list_counter)   
+                        else:
+                            markdown_content += f"{clean_line}\n"
+                            list_counter = 0  # Reset numbered list counter
 
                 markdown_content += "\n"
 
