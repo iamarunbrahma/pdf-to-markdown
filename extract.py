@@ -66,20 +66,23 @@ class MarkdownPDFExtractor(PDFExtractor):
             self.logger.exception(traceback.format_exc())
 
     def extract(self):
-        """Extract markdown content from PDF."""
         try:
-            markdown_content = self.extract_markdown()
+            markdown_content, markdown_pages = self.extract_markdown()
             self.save_markdown(markdown_content)
             self.logger.info(f"Markdown content has been saved to outputs/{self.pdf_filename}.md")
+            return markdown_pages
+        
         except Exception as e:
             self.logger.error(f"Error processing PDF: {e}")
             self.logger.exception(traceback.format_exc())
+            return "", []
 
     def extract_markdown(self):
         """Main method to extract markdown from PDF."""
         try:
             doc = fitz.open(self.pdf_path)
             markdown_content = ""
+            markdown_pages = []
             tables = self.extract_tables()
             table_index = 0
             list_counter = 0
@@ -90,26 +93,31 @@ class MarkdownPDFExtractor(PDFExtractor):
 
             for page_num, page in enumerate(doc):
                 self.logger.info(f"Processing page {page_num + 1}")
+                page_content = ""
                 blocks = page.get_text("dict")["blocks"]
                 page_height = page.rect.height
                 links = self.extract_links(page)
 
                 for block in blocks:
                     if block["type"] == 0:  # Text
-                        markdown_content += self.process_text_block(block, page_height, links, list_counter, in_code_block, code_block_content, code_block_lang, prev_line)
+                        page_content += self.process_text_block(block, page_height, links, list_counter, in_code_block, code_block_content, code_block_lang, prev_line)
                     elif block["type"] == 1:  # Image
-                        markdown_content += self.process_image_block(page, block)
+                        page_content += self.process_image_block(page, block)
 
                 # Insert tables at their approximate positions
                 while table_index < len(tables) and tables[table_index]["page"] == page.number:
-                    markdown_content += "\n\n" + self.table_to_markdown(tables[table_index]["content"]) + "\n\n"
+                    page_content += "\n\n" + self.table_to_markdown(tables[table_index]["content"]) + "\n\n"
                     table_index += 1
 
-            return self.post_process_markdown(markdown_content)
+                markdown_pages.append(self.post_process_markdown(page_content))
+                markdown_content += page_content
+
+            markdown_content = self.post_process_markdown(markdown_content)
+            return markdown_content, markdown_pages
         except Exception as e:
             self.logger.error(f"Error extracting markdown: {e}")
             self.logger.exception(traceback.format_exc())
-            return ""
+            return "", []
 
     def extract_tables(self):
         """Extract tables from PDF using pdfplumber."""
@@ -419,8 +427,8 @@ class MarkdownPDFExtractor(PDFExtractor):
             pix = page.get_pixmap(clip=image_rect)
             image = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
             
-            image_filename = f"outputs/{self.pdf_filename}_image_{int(page.number)+1}_{block['number']}.png"
-            image.save(image_filename)
+            image_filename = f"{self.pdf_filename}_image_{int(page.number)+1}_{block['number']}.png"
+            image.save(f"outputs/{image_filename}")
 
             caption = self.caption_image(image)
 
@@ -484,7 +492,8 @@ def main():
     args = parser.parse_args()
 
     extractor = MarkdownPDFExtractor(args.pdf_path)
-    extractor.extract()
+    markdown_pages = extractor.extract()
+    return markdown_pages
 
 if __name__ == "__main__":
     main()
