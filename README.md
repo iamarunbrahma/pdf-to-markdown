@@ -30,14 +30,14 @@ This project aims to extract markdown-formatted content from PDF files, specific
 
 1. Clone the repository:
    ```
-   git clone https://github.com/yourusername/pdf-to-markdown-extractor.git
-   cd pdf-to-markdown-extractor
+   git clone https://github.com/iamarunbrahma/pdf-to-markdown.git
+   cd pdf-to-markdown
    ```
 
 2. Create a virtual environment (optional but recommended):
    ```
    python -m venv venv
-   source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
+   source venv/bin/activate
    ```
 
 3. Install the required packages:
