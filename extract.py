@@ -548,7 +548,10 @@ class MarkdownPDFExtractor(PDFExtractor):
         """Process an image block and convert it to markdown."""
         try:
             image_rect = block["bbox"]
-            pix = page.get_pixmap(clip=image_rect)
+            zoom_x = 2.0  # horizontal zoom
+            zoom_y = 2.0  # vertical zoom
+            mat = fitz.Matrix(zoom_x, zoom_y)  # zoom factor 2 in each dimension
+            pix = page.get_pixmap(clip=image_rect, matrix=mat)
             image = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
 
             if image.width < 20 or image.height < 20:
