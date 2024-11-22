@@ -551,7 +551,7 @@ class MarkdownPDFExtractor(PDFExtractor):
             zoom_x = 2.0  # horizontal zoom
             zoom_y = 2.0  # vertical zoom
             mat = fitz.Matrix(zoom_x, zoom_y)  # zoom factor 2 in each dimension
-            pix = page.get_pixmap(clip=image_rect, matrix=mat)
+            pix = page.get_pixmap(clip=image_rect, matrix=mat, alpha=False)
             image = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
 
             if image.width < 20 or image.height < 20:
@@ -563,7 +563,7 @@ class MarkdownPDFExtractor(PDFExtractor):
             image_path = (
                 Path(config["OUTPUT_DIR"]) / image_filename
             )  # Convert to Path object
-            image.save(image_path)
+            image.save(image_path, "PNG", optimize=True, quality=95)
 
             caption = self.caption_image(image)
             if not caption:
