@@ -18,7 +18,9 @@ import argparse
 
 warnings.filterwarnings("ignore")
 
-with open(Path("config/config.yaml").resolve(), "r", encoding="utf-8") as f:
+script_dir = Path(__file__).parent
+config_path = script_dir / "config" / "config.yaml"
+with open(config_path, "r", encoding="utf-8") as f:
     config = yaml.safe_load(f)
 
 
@@ -56,10 +58,11 @@ class MarkdownPDFExtractor(PDFExtractor):
 
     BULLET_POINTS = "•◦▪▫●○"
 
-    def __init__(self, pdf_path):
+    def __init__(self, pdf_path, output_dir=None):
         super().__init__(pdf_path)
         self.pdf_filename = Path(pdf_path).stem
-        Path(config["OUTPUT_DIR"]).mkdir(parents=True, exist_ok=True)
+        self.output_dir = output_dir or config["OUTPUT_DIR"]
+        Path(self.output_dir).mkdir(parents=True, exist_ok=True)
         self.setup_image_captioning()
 
     def setup_image_captioning(self):
@@ -86,7 +89,7 @@ class MarkdownPDFExtractor(PDFExtractor):
             markdown_content, markdown_pages = self.extract_markdown()
             self.save_markdown(markdown_content)
             self.logger.info(
-                f"Markdown content has been saved to {Path(config['OUTPUT_DIR'])}/{self.pdf_filename}.md"
+                f"Markdown content has been saved to {Path(self.output_dir)}/{self.pdf_filename}.md"
             )
             return markdown_content, markdown_pages
 
@@ -561,7 +564,7 @@ class MarkdownPDFExtractor(PDFExtractor):
                 f"{self.pdf_filename}_image_{int(page.number)+1}_{block['number']}.png"
             )
             image_path = (
-                Path(config["OUTPUT_DIR"]) / image_filename
+                Path(self.output_dir) / image_filename
             )  # Convert to Path object
             image.save(image_path, "PNG", optimize=True, quality=95)
 
@@ -635,9 +638,9 @@ class MarkdownPDFExtractor(PDFExtractor):
     def save_markdown(self, markdown_content):
         """Save the markdown content to a file."""
         try:
-            os.makedirs(Path(config["OUTPUT_DIR"]), exist_ok=True)
+            os.makedirs(Path(self.output_dir), exist_ok=True)
             with open(
-                f"{Path(config['OUTPUT_DIR'])}/{self.pdf_filename}.md",
+                f"{Path(self.output_dir)}/{self.pdf_filename}.md",
                 "w",
                 encoding="utf-8",
             ) as f:
@@ -653,9 +656,13 @@ def main():
         description="Extract markdown-formatted content from a PDF file."
     )
     parser.add_argument("--pdf_path", help="Path to the input PDF file", required=True)
+    parser.add_argument("--output", help="Specify the output directory for markdown files", default=config["OUTPUT_DIR"])
     args = parser.parse_args()
 
-    extractor = MarkdownPDFExtractor(args.pdf_path)
+    # Create the output directory if it doesn't exist
+    Path(args.output).mkdir(parents=True, exist_ok=True)
+
+    extractor = MarkdownPDFExtractor(args.pdf_path, args.output)
     markdown_pages = extractor.extract()
     return markdown_pages
 
