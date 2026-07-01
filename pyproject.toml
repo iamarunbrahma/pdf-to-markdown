@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pdf2md"
+version = "1.0.0"
+description = "Thorough, MIT-only PDF to Markdown converter (no AGPL/ML dependencies)."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Arun Brahma" }]
+# Core dependencies - all top-level packages are MIT-licensed. Transitive deps
+# are permissive (pdfminer.six=MIT, charset-normalizer=MIT, Pillow=MIT-CMU,
+# cryptography=Apache/BSD, pypdfium2=BSD/Apache). No copyleft anywhere.
+dependencies = [
+    "pdfplumber>=0.11",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+# Opt-in high-accuracy math via pix2tex (MIT, but pulls in BSD torch); kept out
+# of the core so the default install stays lean. Install with: uv sync --extra math
+math = ["pix2tex>=0.1.2"]
+
+[project.scripts]
+pdf2md = "pdf2md.cli:main"
+
+# Dev/test tooling (not shipped). Installed by default with `uv sync`.
+# reportlab generates the fixture/benchmark PDFs; ruff lints/formats.
+[dependency-groups]
+dev = [
+    "pytest>=7.0",
+    "reportlab>=4.0",
+    "ruff>=0.5",
+]
+
+[tool.setuptools.packages.find]
+include = ["pdf2md*"]

@@ -1,8 +1,0 @@
-PyMuPDF
-pdfplumber
-pytesseract
-opencv-python
-numpy
-transformers
-torch
-Pillow

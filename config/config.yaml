@@ -1,2 +1,11 @@
-PAGE_DELIMITER: <||WXb23TXrUn3Rxz00yNNr89HV||>
+# Output
 OUTPUT_DIR: outputs
+# Inserted between pages in the combined Markdown output ("" = just a blank line).
+PAGE_DELIMITER: ""
+
+# Feature toggles
+extract_images: true            # export embedded images via pdfminer ImageWriter
+detect_borderless_tables: true  # also detect tables that have no ruling lines
+detect_blockquote: true         # treat doubly-indented paragraphs as blockquotes
+detect_footnotes: true          # pull small-font bottom-of-page notes into [^n]
+bold_as_heading: true           # treat short, standalone all-bold lines as headings

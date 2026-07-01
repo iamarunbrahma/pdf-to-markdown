@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+outputs/
+*.egg-info/
+.pytest_cache/
+# Local scratch
+/tmp/
+.playwright-mcp/
+*.png
+benchmarks/samples/_out/
+.ruff_cache/
