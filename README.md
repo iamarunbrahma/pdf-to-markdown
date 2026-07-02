@@ -1,14 +1,19 @@
-# PDF to Markdown
+# pdf2md
 
-A thorough, **MIT-only** PDF → Markdown converter built on
-[`pdfplumber`](https://github.com/jsvine/pdfplumber) / `pdfminer.six`. It extracts
-document *structure* - headings, lists, tables, code, math, links, images - not
-just plain text. No AGPL (`PyMuPDF`), no ML/OCR stack, and no copyleft anywhere in
-the dependency tree.
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-blue.svg)](https://www.python.org)
+![Dependencies: MIT-only](https://img.shields.io/badge/dependencies-MIT--only-brightgreen.svg)
+[![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+
+> **Turn PDFs into clean, structured Markdown - MIT-only, zero copyleft.**
+
+`pdf2md` extracts a PDF's *structure* - headings, lists, tables, code, math,
+links, and images - not just its raw text. It is built on the MIT-licensed
+[`pdfplumber`](https://github.com/jsvine/pdfplumber) / `pdfminer.six`, with no
+AGPL (`PyMuPDF`) and no heavy ML/OCR stack anywhere in the dependency tree.
 
 ## Install
-
-Managed with [uv](https://docs.astral.sh/uv/) via `pyproject.toml`:
 
 ```bash
 uv sync
@@ -17,44 +22,22 @@ uv sync
 ## Usage
 
 ```bash
-uv run pdf2md --pdf_path file.pdf [--out DIR] [--config config/config.yaml]
+uv run pdf2md --pdf_path paper.pdf --out out/
+# → writes out/paper.md
 ```
-
-```python
-from pdf2md import convert_pdf
-
-markdown = convert_pdf("file.pdf")
-```
-
-Output is written to `<OUTPUT_DIR>/<name>.md` (default `outputs/`) with any
-extracted images alongside. Behaviour is tunable in `config/config.yaml`.
 
 ## Features
 
-Headings, paragraphs (de-hyphenated), bold/italic/inline-code, super/subscript,
-ordered/unordered/nested lists, links, blockquotes, code blocks, GFM tables
-(ruled + borderless), images, multi-column reading order, rotated pages,
-math → LaTeX (`$…$` / `$$…$$`), footnotes, TOC, and header/footer stripping.
+- **Headings** from document-wide font-size statistics
+- **Text**: paragraphs (de-hyphenated), bold / italic / inline code, super/subscript, links
+- **Lists** (ordered, unordered, nested), blockquotes, horizontal rules
+- **Code blocks** via monospace-font detection
+- **Tables** - ruled *and* borderless, as GFM pipe tables
+- **Math → LaTeX** - inline `$…$` and display `$$…$$` (heuristic)
+- **Layout** - multi-column reading order, rotated/landscape pages, header/footer stripping
+- **Footnotes**, **table of contents**, **images**, and **CJK / Unicode** text
 
-## Optional: high-accuracy math
-
-Core math is heuristic. For accurate equations, install the opt-in ML extra
-(`pix2tex`, which pulls in BSD `torch`, kept out of the core):
-
-```bash
-uv sync --extra math
-```
-
-## Limitations
-
-No OCR (scanned pages yield images only); heuristic math is best-effort; dense
-multi-table and right-to-left layouts may need review.
-
-## Testing
-
-```bash
-uv run pytest -q
-```
+Behaviour is tunable in [`config/config.yaml`](config/config.yaml).
 
 ## License
 
