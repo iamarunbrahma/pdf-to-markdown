@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import subprocess
 
 import pytest
 
@@ -59,3 +60,34 @@ def test_extract_writes_file(tmp_path):
     assert out.is_file()
     assert out.read_text(encoding="utf-8").strip() == full.strip()
     assert len(pages) >= 1
+
+
+def test_pdf_fixtures_are_never_line_ending_converted():
+    """Every fixture PDF must be `-text`, so no checkout can rewrite its bytes.
+
+    Git only infers "binary" from a NUL byte in the first 8000, and these small
+    reportlab PDFs contain none - so Git treats them as text. Under the
+    Git-for-Windows default (core.autocrlf=true) each LF is then expanded to
+    CRLF on checkout, which shifts every xref offset and makes the file
+    unreadable ("Unexpected EOF"). `*.pdf binary` in .gitattributes is what
+    pins this; see issue #9.
+    """
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    names = sorted(n for n in os.listdir(FIXTURES) if n.endswith(".pdf"))
+    assert names, "no fixture PDFs to check"
+
+    try:
+        proc = subprocess.run(
+            ["git", "check-attr", "text", "--"]
+            + [f"tests/fixtures/{n}" for n in names],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+        )
+    except OSError:  # pragma: no cover - git missing (installed sdist)
+        pytest.skip("git not available")
+    if proc.returncode != 0:  # pragma: no cover - not a work tree
+        pytest.skip("not a git work tree")
+
+    for line in proc.stdout.splitlines():
+        assert line.endswith(": unset"), f"{line} (expected `text: unset`)"

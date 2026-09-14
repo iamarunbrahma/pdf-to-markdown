@@ -1,0 +1,6 @@
+# Git only infers "binary" from a NUL byte in a blob's first 8000 bytes, and the
+# small reportlab-generated fixture PDFs contain none. Without this, a clone made
+# with core.autocrlf=true (the Git for Windows installer default) expands every
+# LF in them to CRLF on checkout, shifting the xref offsets so the file no longer
+# opens ("Unexpected EOF"). See issue #9.
+*.pdf binary
