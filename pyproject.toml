@@ -22,6 +22,10 @@ dependencies = [
 # Opt-in high-accuracy math via pix2tex (MIT, but pulls in BSD torch); kept out
 # of the core so the default install stays lean. Install with: uv sync --extra math
 math = ["pix2tex>=0.1.2"]
+# Opt-in CLI progress bar. tqdm is dual-licensed MPL-2.0/MIT, so it stays out of
+# the MIT-only core; without it the CLI simply runs without a bar.
+# Install with: uv sync --extra progress
+progress = ["tqdm>=4.66"]
 
 [project.scripts]
 pdf2md = "pdf2md.cli:main"
@@ -33,6 +37,7 @@ dev = [
     "pytest>=7.0",
     "reportlab>=4.0",
     "ruff>=0.5",
+    "tqdm>=4.66",
 ]
 
 [tool.setuptools.packages.find]
