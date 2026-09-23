@@ -111,18 +111,15 @@ def main(argv=None) -> int:
     if args.out:
         config["OUTPUT_DIR"] = args.out
 
-    extractor = PdfToMarkdown(config)
     show_progress = progress_enabled(force=args.progress)
     progress = TqdmProgress(enabled=show_progress)
     extractor = PdfToMarkdown(config, progress=progress if show_progress else None)
+    out_dir = extractor.config["OUTPUT_DIR"]
     with progress, _route_logging_through_progress(show_progress):
+        progress.status(_feature_summary(extractor.config))
         for pdf_path in pdf_paths:
             extractor.extract(str(pdf_path))
             print(f"Wrote {out_dir}/{pdf_path.stem}.md")
-            progress.status(_feature_summary(extractor.config))
-            extractor.extract(args.pdf_path)
-
-    out_dir = extractor.config["OUTPUT_DIR"]
 
     return 0
 
