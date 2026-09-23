@@ -26,15 +26,23 @@ def _load_config(path: str | None) -> dict:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
         prog="pdf2md",
-        description="Convert a PDF file to Markdown (MIT-only, no AGPL/ML deps).",
+        description="Convert PDF files to Markdown (MIT-only, no AGPL/ML deps).",
     )
-    parser.add_argument("--pdf_path", required=True, help="Path to the input PDF file")
+    parser.add_argument(
+        "--pdf_path",
+        required=True,
+        nargs="+",
+        help="One or more input PDF paths",
+    )
     parser.add_argument("--out", help="Output directory (overrides config OUTPUT_DIR)")
     parser.add_argument("--config", help="Path to a YAML config file")
     args = parser.parse_args(argv)
 
-    if not Path(args.pdf_path).is_file():
-        print(f"error: file not found: {args.pdf_path}", file=sys.stderr)
+    pdf_paths = [Path(path) for path in args.pdf_path]
+    missing = [path for path in pdf_paths if not path.is_file()]
+    if missing:
+        for path in missing:
+            print(f"error: file not found: {path}", file=sys.stderr)
         return 2
 
     config = _load_config(args.config)
@@ -42,10 +50,10 @@ def main(argv=None) -> int:
         config["OUTPUT_DIR"] = args.out
 
     extractor = PdfToMarkdown(config)
-    extractor.extract(args.pdf_path)
     out_dir = extractor.config["OUTPUT_DIR"]
-    name = Path(args.pdf_path).stem
-    print(f"Wrote {out_dir}/{name}.md")
+    for pdf_path in pdf_paths:
+        extractor.extract(str(pdf_path))
+        print(f"Wrote {out_dir}/{pdf_path.stem}.md")
     return 0
 
 

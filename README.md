@@ -25,6 +25,9 @@ uv sync
 ```bash
 uv run pdf2md --pdf_path paper.pdf --out out/
 # → writes out/paper.md
+
+uv run pdf2md --pdf_path paper.pdf chapter.pdf --out out/
+# → writes out/paper.md and out/chapter.md
 ```
 
 ## Features
