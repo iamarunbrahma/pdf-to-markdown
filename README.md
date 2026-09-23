@@ -24,10 +24,10 @@ uv sync
 
 ```bash
 uv run pdf2md --pdf_path paper.pdf --out out/
-# → writes out/paper.md
+# → writes out/paper.md; extracted images land in out/ and are linked relative to the .md
 
 uv run pdf2md --pdf_path paper.pdf chapter.pdf --out out/
-# → writes out/paper.md and out/chapter.md
+
 ```
 
 ## Features
@@ -51,6 +51,45 @@ default install stays lean):
 
 ```bash
 uv sync --extra math
+```
+
+## Optional: progress bar
+
+Every step of the pipeline reports itself, so a long conversion is never a black
+box. Steps that walk the pages get a bar; one-off steps print a `[pdf2md]` line:
+
+```text
+[pdf2md] features on: images, borderless tables, blockquotes, footnotes, bold headings
+extracting images: 100%|##########| 1477/1477 [01:33<00:00, 15.76page/s]
+reading pages:     100%|##########| 1477/1477 [01:39<00:00, 14.81page/s]
+analyzing layout:  100%|##########| 1477/1477 [01:17<00:00, 18.98page/s]
+[pdf2md] measuring document
+[pdf2md] detecting headers/footers
+rendering pages:   100%|##########| 1477/1477 [00:01<00:00, 1115.97page/s]
+[pdf2md] writing markdown
+```
+
+It is opt-in because tqdm is dual-licensed MPL-2.0/MIT, and the core stays
+MIT-only; without it the CLI just runs quietly.
+
+```bash
+uv sync --extra progress
+uv run pdf2md --pdf_path paper.pdf                 # bar when stderr is a terminal
+uv run pdf2md --pdf_path paper.pdf --progress      # force on (piped output, CI)
+uv run pdf2md --pdf_path paper.pdf --no-progress   # completely silent
+```
+
+Auto-detection can also be overridden with `PDF2MD_PROGRESS=1` /
+`PDF2MD_NO_PROGRESS=1`.
+
+As a library, pass any `progress(stage, done, total)` callable - `total > 0` is
+per-page progress, `total == 0` is a one-off step. The pipeline never imports
+tqdm itself, so nothing is pulled in unless you ask for it:
+
+```python
+from pdf2md import PdfToMarkdown
+
+PdfToMarkdown(progress=lambda stage, done, total: print(stage, done, total))
 ```
 
 ## Limitations

@@ -24,6 +24,16 @@ from .images import extract_images
 from .ir import Block, BlockType, Document, Page
 from .loader import load_page
 from .postprocess import clean
+from .progress import (
+    ONE_SHOT,
+    STAGE_ANALYZE,
+    STAGE_HEADERS,
+    STAGE_LOAD,
+    STAGE_RENDER,
+    STAGE_SERIALIZE,
+    STAGE_STATS,
+    ProgressCallback,
+)
 from .regions import drop_lines_in_boxes, reading_order_segments
 from .serialize import serialize
 from .tables import detect_tables
@@ -41,38 +51,86 @@ DEFAULT_CONFIG = {
 _FOOTNOTE_MARKER = re.compile(r"^(\d{1,3})[\s.)\]]")
 
 
+def _page_count(pdf_path: str) -> int:
+    """Page count for the pre-pipeline image pass; 0 when the PDF will not open.
+
+    Image extraction runs before pass A, so that pass cannot supply the total its
+    progress bar needs. Only called when a progress callback is actually set.
+    """
+    try:
+        with pdfplumber.open(pdf_path) as pdf:
+            return len(pdf.pages)
+    except Exception:
+        return 0
+
+
 class PdfToMarkdown:
-    def __init__(self, config: dict | None = None):
+    """PDF -> Markdown pipeline.
+
+    ``progress`` is an optional callback invoked as ``progress(stage, done,
+    total)``; see :mod:`pdf2md.progress` for the stage names and a tqdm-backed
+    implementation. Nothing in the core needs it, so library users never pay for
+    a progress bar.
+    """
+
+    def __init__(
+        self,
+        config: dict | None = None,
+        progress: ProgressCallback | None = None,
+    ):
         self.config = {**DEFAULT_CONFIG, **(config or {})}
+        self.progress = progress
+
+    def _report(self, stage: str, done: int, total: int) -> None:
+        """Hand one page's worth of progress to the caller's callback, if any."""
+        if self.progress is not None:
+            self.progress(stage, done, total)
+
+    def _announce(self, stage: str) -> None:
+        """Flag a step that has no per-page progress of its own."""
+        if self.progress is not None:
+            self.progress(stage, 0, ONE_SHOT)
 
     # ---- public API -------------------------------------------------------
     def convert(self, pdf_path: str) -> Document:
         image_map = {}
         if self.config["extract_images"]:
             try:
-                image_map = extract_images(pdf_path, self.config["OUTPUT_DIR"])
+                image_map = extract_images(
+                    pdf_path,
+                    self.config["OUTPUT_DIR"],
+                    self.progress,
+                    # Costs an extra open, so only pay for it when someone is
+                    # listening; without a callback the total is never used.
+                    _page_count(pdf_path) if self.progress is not None else 0,
+                )
             except Exception:
                 image_map = {}
 
         pages_data, all_lines = self._pass_a(pdf_path)
         page_width = pages_data[0]["width"] if pages_data else 612.0
+        self._announce(STAGE_STATS)
         stats = compute_stats(all_lines, page_width, self.config)
 
+        self._announce(STAGE_HEADERS)
         sigs = headers.collect_signatures(
             [(p["height"], p["lines"]) for p in pages_data]
         )
         repeating = headers.repeating_set(sigs, len(pages_data))
 
         document = Document(meta={"source": pdf_path})
-        for pdata in pages_data:
+        total = len(pages_data)
+        for i, pdata in enumerate(pages_data, 1):
             page = self._pass_b(
                 pdata, stats, repeating, image_map.get(pdata["number"], [])
             )
             document.pages.append(page)
+            self._report(STAGE_RENDER, i, total)
         return document
 
     def convert_to_markdown(self, pdf_path: str) -> tuple[str, list[str]]:
         document = self.convert(pdf_path)
+        self._announce(STAGE_SERIALIZE)
         full, page_md = serialize(document, self.config["PAGE_DELIMITER"])
         return clean(full), [clean(p) for p in page_md]
 
@@ -90,11 +148,15 @@ class PdfToMarkdown:
     def _pass_a(self, pdf_path: str):
         pages_data, all_lines = [], []
         with pdfplumber.open(pdf_path) as pdf:
-            raws = [load_page(page) for page in pdf.pages]
+            total = len(pdf.pages)
+            raws = []
+            for i, page in enumerate(pdf.pages, 1):
+                raws.append(load_page(page))
+                self._report(STAGE_LOAD, i, total)
             # Monospace fonts are detected document-wide (advance-width uniformity)
             # so code is recognized even when the font name lacks "mono"/"courier".
             mono_fonts = fonts.detect_mono_fonts([c for r in raws for c in r.chars])
-            for page, raw in zip(pdf.pages, raws):
+            for i, (page, raw) in enumerate(zip(pdf.pages, raws), 1):
                 lines = group_into_lines(
                     raw.chars, raw.hyperlinks, raw.width, mono_fonts
                 )
@@ -112,6 +174,7 @@ class PdfToMarkdown:
                     }
                 )
                 all_lines.extend(lines)
+                self._report(STAGE_ANALYZE, i, total)
         return pages_data, all_lines
 
     def _pass_b(self, pdata, stats, repeating, page_images) -> Page:
@@ -214,7 +277,11 @@ def _splice_by_top(text_blocks: list[Block], floating: list[Block]) -> list[Bloc
     return result
 
 
-def convert_pdf(pdf_path: str, config: dict | None = None) -> str:
+def convert_pdf(
+    pdf_path: str,
+    config: dict | None = None,
+    progress: ProgressCallback | None = None,
+) -> str:
     """Convenience: return the full Markdown for a PDF."""
-    full, _ = PdfToMarkdown(config).convert_to_markdown(pdf_path)
+    full, _ = PdfToMarkdown(config, progress=progress).convert_to_markdown(pdf_path)
     return full
