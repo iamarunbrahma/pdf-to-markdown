@@ -99,6 +99,10 @@ def main(argv=None) -> int:
         print(f"error: file not found: {args.pdf_path}", file=sys.stderr)
         return 2
 
+    if args.config and not Path(args.config).is_file():
+        print(f"error: config file not found: {args.config}", file=sys.stderr)
+        return 2
+
     config = _load_config(args.config)
     if args.out:
         config["OUTPUT_DIR"] = args.out
